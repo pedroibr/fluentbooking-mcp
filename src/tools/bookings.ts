@@ -348,4 +348,34 @@ export const bookingTools: ToolDefinition[] = [
       });
     },
   },
+  {
+    name: "delete_booking",
+    description: "Exclui um booking existente do FluentBooking.",
+    module: "bookings",
+    access: "delete",
+    status: "ready",
+    upstreamHint: "DELETE /schedules/{id}",
+    inputSchema: {
+      type: "object",
+      properties: {
+        booking_id: {
+          type: "number",
+          description: "ID do booking/schedule a excluir.",
+        },
+      },
+      required: ["booking_id"],
+      additionalProperties: false,
+    },
+    handler: async ({ client }, args) => {
+      const bookingId = requiredNumberArg(args, "booking_id");
+      const data = await client.delete(`/schedules/${bookingId}`);
+
+      return textToolResult({
+        ok: true,
+        tool: "delete_booking",
+        booking_id: bookingId,
+        data,
+      });
+    },
+  },
 ];

@@ -12,6 +12,7 @@ interface PlannedToolOptions {
 export function plannedTool(options: PlannedToolOptions): ToolDefinition {
   return {
     ...options,
+    visibility: "public",
     status: "planned",
     handler: async (_context, args) => plannedResult(options, args),
   };

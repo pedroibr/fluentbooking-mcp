@@ -44,6 +44,7 @@ export interface ToolDefinition {
   description: string;
   module: string;
   access: "read" | "write" | "delete";
+  visibility?: "public" | "internal";
   status: "planned" | "ready";
   upstreamHint?: string;
   inputSchema: JsonSchema;

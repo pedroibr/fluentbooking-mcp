@@ -101,11 +101,11 @@ async function handleToolCall(
   }
 
   if (tool.access === "write" && !env.allowWrites) {
-    return jsonRpcError(id, -32000, "Escrita desabilitada. Defina ALLOW_WRITES=true.");
+    return jsonRpcError(id, -32000, `Tool ${toolName} bloqueada: ALLOW_WRITES=false`);
   }
 
   if (tool.access === "delete" && !env.allowDeletes) {
-    return jsonRpcError(id, -32000, "Delete desabilitado. Defina ALLOW_DELETES=true.");
+    return jsonRpcError(id, -32000, `Tool ${toolName} bloqueada: ALLOW_DELETES=false`);
   }
 
   try {
@@ -134,12 +134,13 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function buildToolAnnotations(tool: ToolDefinition): ToolAnnotations {
   const isRead = tool.access === "read";
+  const isDelete = tool.access === "delete";
 
   return {
     readOnlyHint: isRead,
-    destructiveHint: !isRead,
+    destructiveHint: isDelete,
     idempotentHint: isRead,
-    openWorldHint: !isRead,
+    openWorldHint: false,
   };
 }
 

@@ -5,7 +5,6 @@ import {
   optionalNumberArg,
   optionalObjectArg,
   optionalStringArg,
-  requiredObjectArg,
   requiredNumberArg,
   requiredStringArg,
   textToolResult,
@@ -17,6 +16,7 @@ export const eventTools: ToolDefinition[] = [
     description: "Lista os tipos de evento disponiveis, achatando os slots retornados pelos calendars.",
     module: "events",
     access: "read",
+    visibility: "public",
     status: "ready",
     upstreamHint: "GET /calendars (flatten calendars[].slots)",
     inputSchema: {
@@ -131,6 +131,7 @@ export const eventTools: ToolDefinition[] = [
     description: "Busca os detalhes completos de um evento do FluentBooking.",
     module: "events",
     access: "read",
+    visibility: "public",
     status: "ready",
     upstreamHint: "GET /events/{event_id}",
     inputSchema: {
@@ -171,6 +172,7 @@ export const eventTools: ToolDefinition[] = [
     description: "Cria um novo tipo de evento dentro de um calendar existente.",
     module: "events",
     access: "write",
+    visibility: "public",
     status: "ready",
     upstreamHint: "POST /calendars/{id}/events",
     inputSchema: {
@@ -186,23 +188,66 @@ export const eventTools: ToolDefinition[] = [
         },
         event_type: {
           type: "string",
-          description: "Tipo do evento, por exemplo single ou group.",
+          description: "Tipo do evento.",
+          enum: ["single", "group"],
         },
-        settings: {
-          type: "object",
-          description: "Configuracao de agenda do evento, conforme a doc do FluentBooking.",
-          additionalProperties: true,
+        availability_days: {
+          type: "array",
+          description: "Dias da semana em que o evento pode ser reservado.",
+          items: {
+            type: "string",
+            enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+          },
+        },
+        availability_start_time: {
+          type: "string",
+          description: "Horario inicial diario no formato HH:mm.",
+        },
+        availability_end_time: {
+          type: "string",
+          description: "Horario final diario no formato HH:mm.",
+        },
+        range_days: {
+          type: "number",
+          description: "Quantidade de dias futuros disponiveis para reserva.",
         },
         description: { type: "string", description: "Descricao do evento." },
         color_schema: { type: "string", description: "Cor hexadecimal." },
-        location_type: { type: "string", description: "Tipo de local." },
-        location_settings: {
-          type: "array",
-          description: "Configuracoes de local.",
-          items: {
-            type: "object",
-            additionalProperties: true,
-          },
+        location_type: {
+          type: "string",
+          description: "Tipo principal de local.",
+          enum: [
+            "online_meeting",
+            "phone_guest",
+            "phone_organizer",
+            "in_person_guest",
+            "in_person_organizer",
+            "custom",
+          ],
+        },
+        location_label: {
+          type: "string",
+          description: "Titulo/rotulo exibido para o local quando aplicavel.",
+        },
+        location_description: {
+          type: "string",
+          description: "Descricao do local, endereco, telefone ou instrucoes.",
+        },
+        host_phone_number: {
+          type: "string",
+          description: "Telefone do organizador quando location_type for phone_organizer.",
+        },
+        meeting_link: {
+          type: "string",
+          description: "Link da reuniao quando location_type for online_meeting.",
+        },
+        buffer_time_before: {
+          type: "number",
+          description: "Minutos de buffer antes de cada slot.",
+        },
+        buffer_time_after: {
+          type: "number",
+          description: "Minutos de buffer depois de cada slot.",
         },
         max_book_per_slot: {
           type: "number",
@@ -213,7 +258,16 @@ export const eventTools: ToolDefinition[] = [
           description: "Exibe quantidade de vagas restantes.",
         },
       },
-      required: ["calendar_id", "title", "duration", "status", "event_type", "settings"],
+      required: [
+        "calendar_id",
+        "title",
+        "duration",
+        "status",
+        "event_type",
+        "availability_days",
+        "availability_start_time",
+        "availability_end_time",
+      ],
       additionalProperties: false,
     },
     handler: async ({ client }, args) => {
@@ -222,24 +276,53 @@ export const eventTools: ToolDefinition[] = [
       const duration = requiredNumberArg(args, "duration");
       const status = requiredStringArg(args, "status");
       const eventType = requiredStringArg(args, "event_type");
-      const settings = requiredObjectArg(args, "settings");
+      const availabilityDays = optionalArrayArg<string>(args, "availability_days") || [];
+      const availabilityStartTime = requiredStringArg(args, "availability_start_time");
+      const availabilityEndTime = requiredStringArg(args, "availability_end_time");
+      const rangeDays = optionalNumberArg(args, "range_days");
       const description = optionalStringArg(args, "description");
       const colorSchema = optionalStringArg(args, "color_schema");
       const locationType = optionalStringArg(args, "location_type");
-      const locationSettings = optionalArrayArg(args, "location_settings");
+      const locationLabel = optionalStringArg(args, "location_label");
+      const locationDescription = optionalStringArg(args, "location_description");
+      const hostPhoneNumber = optionalStringArg(args, "host_phone_number");
+      const meetingLink = optionalStringArg(args, "meeting_link");
+      const bufferTimeBefore = optionalNumberArg(args, "buffer_time_before");
+      const bufferTimeAfter = optionalNumberArg(args, "buffer_time_after");
       const maxBookPerSlot = optionalNumberArg(args, "max_book_per_slot");
       const isDisplaySpots = optionalBooleanArg(args, "is_display_spots");
+      const locationSettings = buildLocationSettings({
+        locationType,
+        locationLabel,
+        locationDescription,
+        hostPhoneNumber,
+        meetingLink,
+      });
+      const weeklySchedules = availabilityDays.map((day) => ({
+        day,
+        from: availabilityStartTime,
+        to: availabilityEndTime,
+      }));
 
       const data = await client.post(`/calendars/${calendarId}/events`, {
         title,
         duration,
         status,
         event_type: eventType,
-        settings,
+        settings: {
+          schedule_type: "weekly_schedules",
+          weekly_schedules: weeklySchedules,
+          range_type: "range_days",
+          range_days: rangeDays ?? 60,
+          ...(bufferTimeBefore !== undefined
+            ? { buffer_time_before: String(bufferTimeBefore) }
+            : {}),
+          ...(bufferTimeAfter !== undefined ? { buffer_time_after: String(bufferTimeAfter) } : {}),
+        },
         ...(description ? { description } : {}),
         ...(colorSchema ? { color_schema: colorSchema } : {}),
         ...(locationType ? { location_type: locationType } : {}),
-        ...(locationSettings ? { location_settings: locationSettings } : {}),
+        ...(locationSettings.length ? { location_settings: locationSettings } : {}),
         ...(maxBookPerSlot !== undefined ? { max_book_per_slot: maxBookPerSlot } : {}),
         ...(isDisplaySpots !== undefined ? { is_display_spots: isDisplaySpots } : {}),
       });
@@ -257,6 +340,7 @@ export const eventTools: ToolDefinition[] = [
     description: "Busca um evento com contexto de calendar e includes opcionais.",
     module: "events",
     access: "read",
+    visibility: "public",
     status: "ready",
     upstreamHint: "GET /calendars/{id}/events/{event_id}",
     inputSchema: {
@@ -302,6 +386,7 @@ export const eventTools: ToolDefinition[] = [
     description: "Atualiza o status de um evento entre draft e active.",
     module: "events",
     access: "write",
+    visibility: "public",
     status: "ready",
     upstreamHint: "PUT /calendars/{id}/events/{event_id}",
     inputSchema: {
@@ -341,6 +426,7 @@ export const eventTools: ToolDefinition[] = [
     description: "Atualiza a disponibilidade de um evento em um calendar.",
     module: "events",
     access: "write",
+    visibility: "internal",
     status: "ready",
     upstreamHint: "POST /calendars/{id}/events/{event_id}/availability",
     inputSchema: {
@@ -440,6 +526,7 @@ export const eventTools: ToolDefinition[] = [
     description: "Exclui um evento de um calendar.",
     module: "events",
     access: "delete",
+    visibility: "public",
     status: "ready",
     upstreamHint: "DELETE /calendars/{id}/events/{event_id}",
     inputSchema: {
@@ -470,6 +557,7 @@ export const eventTools: ToolDefinition[] = [
     description: "Busca a configuracao de disponibilidade de um evento em um calendar.",
     module: "events",
     access: "read",
+    visibility: "public",
     status: "ready",
     upstreamHint: "GET /calendars/{id}/events/{event_id}/availability",
     inputSchema: {
@@ -496,3 +584,73 @@ export const eventTools: ToolDefinition[] = [
     },
   },
 ];
+
+function buildLocationSettings({
+  locationType,
+  locationLabel,
+  locationDescription,
+  hostPhoneNumber,
+  meetingLink,
+}: {
+  locationType?: string;
+  locationLabel?: string;
+  locationDescription?: string;
+  hostPhoneNumber?: string;
+  meetingLink?: string;
+}) {
+  if (!locationType) {
+    return [];
+  }
+
+  if (locationType === "online_meeting") {
+    return [
+      {
+        type: "online_meeting",
+        title: locationLabel || "",
+        display_on_booking: "",
+        meeting_link: meetingLink || "#",
+      },
+    ];
+  }
+
+  if (locationType === "phone_organizer") {
+    return [
+      {
+        type: "phone_organizer",
+        title: locationLabel || "",
+        display_on_booking: "",
+        host_phone_number: hostPhoneNumber || locationDescription || "",
+      },
+    ];
+  }
+
+  if (locationType === "custom") {
+    return [
+      {
+        type: "custom",
+        title: locationLabel || "Custom",
+        display_on_booking: "",
+        description: locationDescription || "",
+      },
+    ];
+  }
+
+  if (locationType === "in_person_organizer") {
+    return [
+      {
+        type: "in_person_organizer",
+        title: locationLabel || "In person",
+        display_on_booking: "",
+        description: locationDescription || "",
+      },
+    ];
+  }
+
+  return [
+    {
+      type: locationType,
+      title: locationLabel || "",
+      display_on_booking: "",
+    },
+  ];
+}

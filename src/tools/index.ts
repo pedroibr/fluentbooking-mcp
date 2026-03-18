@@ -16,7 +16,9 @@ export function getToolRegistry(): ToolDefinition[] {
 }
 
 export function getReadyToolRegistry(): ToolDefinition[] {
-  return TOOL_REGISTRY.filter((tool) => tool.status === "ready");
+  return TOOL_REGISTRY.filter(
+    (tool) => tool.status === "ready" && (tool.visibility || "public") === "public"
+  );
 }
 
 export function getToolByName(name: string): ToolDefinition | undefined {
