@@ -386,58 +386,6 @@ export const bookingTools: ToolDefinition[] = [
     },
   },
   {
-    name: "get_event_time_slots",
-    description: "Busca apenas os slots disponiveis de um evento para booking.",
-    module: "bookings",
-    access: "read",
-    status: "ready",
-    upstreamHint: "GET /bookings/slots/{event_id}",
-    inputSchema: {
-      type: "object",
-      properties: {
-        event_id: { type: "number", description: "ID do evento." },
-        start_date: {
-          type: "string",
-          description: "Data inicial no formato YYYY-MM-DD HH:mm:ss.",
-        },
-        timezone: {
-          type: "string",
-          description: "Timezone IANA para disponibilidade.",
-        },
-      },
-      required: ["event_id"],
-      additionalProperties: false,
-    },
-    handler: async ({ client }, args) => {
-      const eventId = requiredNumberArg(args, "event_id");
-      const startDate = optionalStringArg(args, "start_date");
-      const timezone = optionalStringArg(args, "timezone");
-      const query = new URLSearchParams();
-
-      if (startDate) {
-        query.set("start_date", startDate);
-      }
-
-      if (timezone) {
-        query.set("timezone", timezone);
-      }
-
-      const suffix = query.toString() ? `?${query.toString()}` : "";
-      const data = await client.get(`/bookings/slots/${eventId}${suffix}`);
-
-      return textToolResult({
-        ok: true,
-        tool: "get_event_time_slots",
-        event_id: eventId,
-        filters: {
-          start_date: startDate || null,
-          timezone: timezone || null,
-        },
-        data,
-      });
-    },
-  },
-  {
     name: "delete_booking",
     description: "Exclui um booking existente do FluentBooking.",
     module: "bookings",

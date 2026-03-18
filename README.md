@@ -53,7 +53,6 @@ Ready:
 - `get_event_availability`
 - `list_bookings`
 - `get_event_for_booking`
-- `get_event_time_slots`
 - `create_booking`
 - `get_event_payment_settings`
 
