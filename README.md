@@ -72,6 +72,12 @@ Planejadas para a proxima fase:
 3. Preencha as credenciais do WordPress
 4. Rode `npm run dev`
 
+Para deploy local, use sempre:
+
+- `npm run deploy`
+
+Esse script usa `--keep-vars` para preservar as variaveis configuradas no dashboard do Cloudflare Worker.
+
 Health endpoint:
 
 - `GET /`

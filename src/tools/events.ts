@@ -3,6 +3,7 @@ import {
   optionalArrayArg,
   optionalBooleanArg,
   optionalNumberArg,
+  optionalObjectArg,
   optionalStringArg,
   requiredObjectArg,
   requiredNumberArg,
@@ -292,6 +293,144 @@ export const eventTools: ToolDefinition[] = [
         calendar_id: calendarId,
         event_id: eventId,
         include: include || [],
+        data,
+      });
+    },
+  },
+  {
+    name: "update_event_status",
+    description: "Atualiza o status de um evento entre draft e active.",
+    module: "events",
+    access: "write",
+    status: "ready",
+    upstreamHint: "PUT /calendars/{id}/events/{event_id}",
+    inputSchema: {
+      type: "object",
+      properties: {
+        calendar_id: { type: "number", description: "ID do calendar." },
+        event_id: { type: "number", description: "ID do evento." },
+        status: {
+          type: "string",
+          description: "Novo status do evento.",
+          enum: ["active", "draft"],
+        },
+      },
+      required: ["calendar_id", "event_id", "status"],
+      additionalProperties: false,
+    },
+    handler: async ({ client }, args) => {
+      const calendarId = requiredNumberArg(args, "calendar_id");
+      const eventId = requiredNumberArg(args, "event_id");
+      const status = requiredStringArg(args, "status");
+      const data = await client.put(`/calendars/${calendarId}/events/${eventId}`, {
+        status,
+      });
+
+      return textToolResult({
+        ok: true,
+        tool: "update_event_status",
+        calendar_id: calendarId,
+        event_id: eventId,
+        status,
+        data,
+      });
+    },
+  },
+  {
+    name: "update_event_availability",
+    description: "Atualiza a disponibilidade de um evento em um calendar.",
+    module: "events",
+    access: "write",
+    status: "ready",
+    upstreamHint: "POST /calendars/{id}/events/{event_id}/availability",
+    inputSchema: {
+      type: "object",
+      properties: {
+        calendar_id: { type: "number", description: "ID do calendar." },
+        event_id: { type: "number", description: "ID do evento." },
+        schedule_type: {
+          type: "string",
+          description: "Modo de agenda, por exemplo weekly_schedules.",
+        },
+        weekly_schedules: {
+          type: "object",
+          description: "Slots semanais por dia da semana.",
+          additionalProperties: true,
+        },
+        date_overrides: {
+          type: "array",
+          description: "Overrides por data.",
+          items: {
+            type: "object",
+            additionalProperties: true,
+          },
+        },
+        range_type: {
+          type: "string",
+          description: "range_days ou date_range.",
+        },
+        range_days: {
+          type: "number",
+          description: "Numero de dias disponiveis quando usar range_days.",
+        },
+        range_date_between: {
+          type: "array",
+          description: "Intervalo de datas quando usar date_range.",
+          items: { type: "string" },
+        },
+        common_schedule: {
+          type: "boolean",
+          description: "Usa agenda compartilhada em eventos de time.",
+        },
+        hosts_schedules: {
+          type: "object",
+          description: "Mapa de host IDs para availability IDs.",
+          additionalProperties: true,
+        },
+        availability_type: {
+          type: "string",
+          description: "existing_schedule ou custom.",
+        },
+        availability_id: {
+          type: "number",
+          description: "ID da availability existente, quando aplicavel.",
+        },
+      },
+      required: ["calendar_id", "event_id", "schedule_type"],
+      additionalProperties: false,
+    },
+    handler: async ({ client }, args) => {
+      const calendarId = requiredNumberArg(args, "calendar_id");
+      const eventId = requiredNumberArg(args, "event_id");
+      const scheduleType = requiredStringArg(args, "schedule_type");
+      const weeklySchedules = optionalObjectArg(args, "weekly_schedules");
+      const dateOverrides = optionalArrayArg(args, "date_overrides");
+      const rangeType = optionalStringArg(args, "range_type");
+      const rangeDays = optionalNumberArg(args, "range_days");
+      const rangeDateBetween = optionalArrayArg(args, "range_date_between");
+      const commonSchedule = optionalBooleanArg(args, "common_schedule");
+      const hostsSchedules = optionalObjectArg(args, "hosts_schedules");
+      const availabilityType = optionalStringArg(args, "availability_type");
+      const availabilityId = optionalNumberArg(args, "availability_id");
+
+      const data = await client.post(`/calendars/${calendarId}/events/${eventId}/availability`, {
+        schedule_type: scheduleType,
+        ...(weeklySchedules ? { weekly_schedules: weeklySchedules } : {}),
+        ...(dateOverrides ? { date_overrides: dateOverrides } : {}),
+        ...(rangeType ? { range_type: rangeType } : {}),
+        ...(rangeDays !== undefined ? { range_days: rangeDays } : {}),
+        ...(rangeDateBetween ? { range_date_between: rangeDateBetween } : {}),
+        ...(commonSchedule !== undefined ? { common_schedule: commonSchedule } : {}),
+        ...(hostsSchedules ? { hosts_schedules: hostsSchedules } : {}),
+        ...(availabilityType ? { availability_type: availabilityType } : {}),
+        ...(availabilityId !== undefined ? { availability_id: availabilityId } : {}),
+      });
+
+      return textToolResult({
+        ok: true,
+        tool: "update_event_availability",
+        calendar_id: calendarId,
+        event_id: eventId,
         data,
       });
     },
