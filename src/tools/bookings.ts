@@ -1,6 +1,7 @@
 import type { ToolDefinition } from "../types";
 import {
   optionalArrayArg,
+  optionalBooleanArg,
   optionalNumberArg,
   optionalObjectArg,
   optionalStringArg,
@@ -135,6 +136,94 @@ export const bookingTools: ToolDefinition[] = [
         ok: true,
         tool: "create_booking",
         event_id: eventId,
+        data,
+      });
+    },
+  },
+  {
+    name: "update_schedule",
+    description: "Atualiza um campo de um booking existente usando o endpoint de schedules.",
+    module: "bookings",
+    access: "write",
+    status: "ready",
+    upstreamHint: "PUT /schedules/{id}",
+    inputSchema: {
+      type: "object",
+      properties: {
+        booking_id: {
+          type: "number",
+          description: "ID do booking/schedule.",
+        },
+        column: {
+          type: "string",
+          description: "Campo a atualizar no schedule.",
+          enum: [
+            "status",
+            "payment_status",
+            "internal_note",
+            "email",
+            "phone",
+            "first_name",
+            "last_name",
+          ],
+        },
+        value: {
+          type: "string",
+          description: "Novo valor para o campo escolhido.",
+        },
+        cancel_reason: {
+          type: "string",
+          description: "Obrigatorio quando column=status e value=cancelled.",
+        },
+        reject_reason: {
+          type: "string",
+          description: "Obrigatorio quando column=status e value=rejected.",
+        },
+        refund_payment: {
+          type: "string",
+          description: "Use yes para pedir reembolso ao cancelar ou rejeitar.",
+          enum: ["yes"],
+        },
+        update_all: {
+          type: "boolean",
+          description: "Atualiza todos os attendees de um booking multi-guest.",
+        },
+      },
+      required: ["booking_id", "column", "value"],
+      additionalProperties: false,
+    },
+    handler: async ({ client }, args) => {
+      const bookingId = requiredNumberArg(args, "booking_id");
+      const column = requiredStringArg(args, "column");
+      const value = requiredStringArg(args, "value");
+      const cancelReason = optionalStringArg(args, "cancel_reason");
+      const rejectReason = optionalStringArg(args, "reject_reason");
+      const refundPayment = optionalStringArg(args, "refund_payment");
+      const updateAll = optionalBooleanArg(args, "update_all");
+
+      if (column === "status" && value === "cancelled" && !cancelReason) {
+        throw new Error("cancel_reason e obrigatorio quando column=status e value=cancelled");
+      }
+
+      if (column === "status" && value === "rejected" && !rejectReason) {
+        throw new Error("reject_reason e obrigatorio quando column=status e value=rejected");
+      }
+
+      const data = await client.put(`/schedules/${bookingId}`, {
+        column,
+        value,
+        ...(cancelReason ? { cancel_reason: cancelReason } : {}),
+        ...(rejectReason ? { reject_reason: rejectReason } : {}),
+        ...(refundPayment ? { refund_payment: refundPayment } : {}),
+        ...(updateAll !== undefined ? { update_all: updateAll } : {}),
+      });
+
+      return textToolResult({
+        ok: true,
+        tool: "update_schedule",
+        booking_id: bookingId,
+        column,
+        value,
         data,
       });
     },
